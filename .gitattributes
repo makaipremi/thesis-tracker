@@ -1,0 +1,4 @@
+# Keep every file byte-identical across Windows, the repo and CI (matters for OTS proofs and the guard)
+* text=auto eol=lf
+*.ico binary
+*.ots binary
