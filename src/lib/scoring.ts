@@ -66,7 +66,7 @@ export interface Performance {
   target?: {
     kind: 'price' | 'return';
     level: number;
-    hitDate?: string; // first close at or beyond target, on or after the posting date
+    hitDate?: string; // first close at or beyond target after the entry date
     withinHorizon?: boolean;
   };
 }
@@ -218,8 +218,8 @@ export function computePerformance(terms: ThesisTerms, prices: Prices, endDate: 
     maxDrawdown,
   };
 
-  // Targets only count from the posting date on: with a back-dated entry, a hit
-  // between entry and posting would be hindsight.
+  // Target hits count from the entry date. A back-dated entry stays visible via
+  // entryGapDays, which the site shows next to the entry point.
   const horizonIso = terms.horizon ? iso(terms.horizon) : undefined;
   if (terms.target !== undefined) {
     // A price level is compared with the split-adjusted close, in entry-date share terms.
@@ -231,12 +231,12 @@ export function computePerformance(terms: ThesisTerms, prices: Prices, endDate: 
       );
     }
     const hit = index.find(
-      (p) => p.date >= postIso && (up ? p.adjClose >= terms.target! : p.adjClose <= terms.target!),
+      (p) => p.date > leg.entryDate && (up ? p.adjClose >= terms.target! : p.adjClose <= terms.target!),
     );
     perf.target = { kind: 'price', level: terms.target, hitDate: hit?.date };
   } else if (terms.target_return !== undefined) {
     // Tolerance so a return of exactly the target (e.g. 9.999999… from float maths) counts.
-    const hit = series.find((p) => p.date >= postIso && p.value >= terms.target_return! - 1e-9);
+    const hit = series.find((p) => p.date > firstEntry && p.value >= terms.target_return! - 1e-9);
     perf.target = { kind: 'return', level: terms.target_return, hitDate: hit?.date };
   }
   if (perf.target?.hitDate && horizonIso) perf.target.withinHorizon = perf.target.hitDate <= horizonIso;

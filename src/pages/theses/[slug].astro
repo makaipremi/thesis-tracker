@@ -1,0 +1,266 @@
+---
+import { render } from 'astro:content';
+import ReturnChart from '../../components/ReturnChart.astro';
+import Base from '../../layouts/Base.astro';
+import { loadTheses, type ThesisView } from '../../lib/data';
+import { fmtDate, fmtLegs, fmtReturn, fmtTarget, returnClass, url } from '../../lib/format';
+import { normaliseLegs } from '../../lib/scoring';
+
+export async function getStaticPaths() {
+	return (await loadTheses()).map((view) => ({ params: { slug: view.thread.slug }, props: { view } }));
+}
+
+interface Props {
+	view: ThesisView;
+}
+
+const REPO = 'https://github.com/makaipremi/thesis-tracker';
+
+const { view } = Astro.props;
+const { thread, performance: perf, pending } = view;
+const o = thread.opening.data;
+const legs = normaliseLegs(o);
+const unit = o.unit;
+
+/** Return as of a post's date (previous close on non-trading days), if the series covers it. */
+const returnAt = (date: Date) => {
+	if (!perf) return undefined;
+	const d = fmtDate(date);
+	return [...perf.series].reverse().find((p) => p.date <= d);
+};
+
+const posts = [
+	{ entry: thread.opening, kind: 'open' as const, title: o.title },
+	...thread.replies.map((r, i) => ({ entry: r, kind: 'reply' as const, title: r.data.title ?? `Update ${i + 1}` })),
+];
+const rendered = await Promise.all(posts.map(async (p) => ({ ...p, Content: (await render(p.entry)).Content })));
+
+const markers = posts.map((p, i) => ({
+	date: fmtDate(p.entry.data.date),
+	label: i === 0 ? 'Open' : 'close' in p.entry.data && p.entry.data.close ? 'Close' : `R${i}`,
+	title: i === 0 ? 'Thesis posted' : p.title,
+}));
+
+const gapText = (days: number) =>
+	days === 0 ? 'same day as posting' : `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ${days > 0 ? 'before' : 'after'} posting`;
+
+const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l.symbol, ...dv }))) ?? [];
+---
+
+<Base title={`#${thread.number} ${o.title}`}>
+	<p class="muted back"><a href={url('theses/')}>← All theses</a></p>
+	<h1>
+		<span class="muted">#{thread.number}</span>{' '}
+		{o.title}
+	</h1>
+	<p>
+		{thread.close ? (
+			<span class={`badge ${thread.close.outcome}`}>{thread.close.outcome} · closed {fmtDate(thread.close.date)}</span>
+		) : (
+			<span class="badge">open</span>
+		)}
+		<span class="muted"> Posted {fmtDate(o.date)}</span>
+	</p>
+
+	<section class="terms" aria-label="Terms, fixed at posting">
+		<h2>Terms <span class="muted small">fixed at posting</span></h2>
+		<dl>
+			{fmtLegs(legs, 'long') && (<><dt>Long</dt><dd>{fmtLegs(legs, 'long')}</dd></>)}
+			{fmtLegs(legs, 'short') && (<><dt>Short</dt><dd>{fmtLegs(legs, 'short')}</dd></>)}
+			<dt>Entry point</dt>
+			<dd>
+				{perf
+					? perf.legs.map((l) => `${l.symbol} ${l.entryClose} (close ${l.entryDate})`).join(' · ')
+					: `Close on ${fmtDate(o.entry_date)}`}
+				{perf && <span class="muted"> — {gapText(perf.entryGapDays)}</span>}
+			</dd>
+			{o.target !== undefined && (<><dt>Target</dt><dd>{o.target}</dd></>)}
+			{o.target_return !== undefined && (<><dt>Target</dt><dd>{fmtReturn(o.target_return, unit)}</dd></>)}
+			{o.horizon && (<><dt>Horizon</dt><dd>{fmtDate(o.horizon)}</dd></>)}
+			{o.wrong_if && (<><dt>Wrong if</dt><dd>{o.wrong_if}</dd></>)}
+			<dt>Measured as</dt>
+			<dd>{unit === 'yield' ? 'Change in yield, basis points' : 'Total return, dividends reinvested, over gross position size'}</dd>
+		</dl>
+	</section>
+
+	{perf ? (
+		<section aria-label="Performance">
+			<div class="stats">
+				<div>
+					<div class="label">{thread.close ? 'Final return' : 'Return to date'}</div>
+					<div class={`value ${returnClass(perf.end.value)}`}>{fmtReturn(perf.end.value, unit)}</div>
+					<div class="muted small">as of {perf.end.date}</div>
+				</div>
+				{unit === 'price' && (
+					<div>
+						<div class="label">Price only</div>
+						<div class="value">{fmtReturn(perf.end.priceValue, unit)}</div>
+						<div class="muted small">excl. dividends</div>
+					</div>
+				)}
+				<div>
+					<div class="label">Max drawdown</div>
+					<div class="value">{fmtReturn(perf.maxDrawdown, unit)}</div>
+					<div class="muted small">peak to trough</div>
+				</div>
+				<div>
+					<div class="label">Target</div>
+					<div class="value">{fmtTarget(perf)}</div>
+					<div class="muted small">counted from entry date</div>
+				</div>
+			</div>
+			<h2>Return since entry</h2>
+			<ReturnChart series={perf.series} unit={unit} markers={markers} target={o.target_return} />
+		</section>
+	) : (
+		<p class="muted">Performance pending: {pending}</p>
+	)}
+
+	<section class="thread" aria-label="Thread">
+		<h2>Thread</h2>
+		{rendered.map(({ entry, kind, title, Content }, i) => {
+			const at = returnAt(entry.data.date);
+			const close = 'close' in entry.data ? entry.data.close : undefined;
+			return (
+				<article class:list={['post', { closing: close }]} id={entry.id.split('/')[1]}>
+					<header>
+						<div>
+							<strong>{kind === 'open' ? 'Opening post' : title}</strong>
+							{close && <span class={`badge ${close}`}>{close}</span>}
+						</div>
+						<div class="meta">
+							<time datetime={fmtDate(entry.data.date)}>{fmtDate(entry.data.date)}</time>
+							{i > 0 && at && (
+								<span class={returnClass(at.value)}> · return at this post {fmtReturn(at.value, unit)}</span>
+							)}
+						</div>
+					</header>
+					<div class="body">
+						<Content />
+					</div>
+				</article>
+			);
+		})}
+	</section>
+
+	<section class="proof" aria-label="Proof">
+		<h2>Proof</h2>
+		<ul>
+			<li>
+				<a href={`${REPO}/commits/main/src/content/theses/${thread.slug}`}>Full edit history on GitHub</a>
+				<span class="muted"> — every change to these posts, public</span>
+			</li>
+			<li class="muted">OpenTimestamps proofs — coming in a later step</li>
+			<li class="muted">Wayback Machine snapshot — coming in a later step</li>
+			<li>
+				Prices used:{' '}
+				{legs.map((l, i) => (
+					<>
+						{i > 0 && ', '}
+						<a href={`${REPO}/blob/main/prices/${l.symbol}.json`}>{l.symbol}</a>
+					</>
+				))}
+				<span class="muted"> — Yahoo Finance closes, frozen when fetched</span>
+			</li>
+		</ul>
+		{dividends.length > 0 && (
+			<p class="small">
+				Dividends included:{' '}
+				{dividends.map((dv) => `${dv.symbol} ${dv.amount} (ex ${dv.date})`).join(' · ')}
+			</p>
+		)}
+	</section>
+</Base>
+
+<style>
+	.back {
+		margin: 0;
+	}
+	h1 {
+		margin: 0.25rem 0 0.5rem;
+		line-height: 1.25;
+	}
+	h2 {
+		font-size: 1.05rem;
+		margin: 2rem 0 0.5rem;
+	}
+	.small {
+		font-size: 0.8rem;
+		font-weight: normal;
+	}
+	.badge {
+		display: inline-block;
+		padding: 0 0.5rem;
+		border-radius: 999px;
+		font-size: 0.8rem;
+		border: 1px solid var(--line);
+		text-transform: capitalize;
+		margin-left: 0.4rem;
+	}
+	p > .badge:first-child {
+		margin-left: 0;
+	}
+	.badge.won {
+		color: var(--pos);
+		border-color: currentColor;
+	}
+	.badge.lost {
+		color: var(--neg);
+		border-color: currentColor;
+	}
+	.terms dl {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.3rem 1.25rem;
+		margin: 0;
+	}
+	.terms dt {
+		color: var(--muted);
+	}
+	.terms dd {
+		margin: 0;
+	}
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+		gap: 1rem;
+		margin: 1.5rem 0 0;
+		padding: 1rem 0;
+		border-top: 1px solid var(--line);
+		border-bottom: 1px solid var(--line);
+	}
+	.stats .label {
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.stats .value {
+		font-size: 1.4rem;
+		font-weight: 600;
+	}
+	.post {
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		margin: 0 0 1rem;
+	}
+	.post.closing {
+		border-color: var(--fg);
+	}
+	.post header {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.25rem 1rem;
+		padding: 0.6rem 1rem;
+		border-bottom: 1px solid var(--line);
+	}
+	.post .meta {
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.post .body {
+		padding: 0 1rem;
+	}
+	.proof ul {
+		padding-left: 1.2rem;
+	}
+</style>

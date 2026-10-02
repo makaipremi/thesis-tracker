@@ -1,0 +1,363 @@
+---
+/**
+ * Single-series line chart of a thesis's return since entry (server-rendered SVG),
+ * with post markers, an optional target line, a crosshair tooltip and a table view.
+ * Mark specs follow the dataviz skill: 2px line, ≥8px markers with a 2px surface ring,
+ * hairline solid grid, one series → no legend (the heading names it).
+ */
+import { fmtReturn } from '../lib/format';
+import type { Point, Unit } from '../lib/scoring';
+
+interface Marker {
+	date: string;
+	label: string; // short label drawn on the chart, e.g. "Open", "R1"
+	title: string; // full text for the tooltip
+}
+
+interface Props {
+	series: Point[];
+	unit: Unit;
+	markers: Marker[];
+	target?: number; // a return target, in the same unit as the series
+}
+
+const { series, unit, markers, target } = Astro.props;
+
+// Drawn at roughly its displayed width (the page is ≤ 68rem) so text isn't scaled up.
+const W = 1040;
+const H = 320;
+const M = { top: 22, right: 72, bottom: 30, left: 56 };
+const iw = W - M.left - M.right;
+const ih = H - M.top - M.bottom;
+
+const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
+const t0 = t(series[0].date);
+const t1 = t(series.at(-1)!.date);
+const x = (d: string) => M.left + (t1 === t0 ? iw / 2 : ((t(d) - t0) / (t1 - t0)) * iw);
+
+// Y domain: always include 0 and the target, then round out to clean ticks.
+const values = series.map((p) => p.value);
+let lo = Math.min(0, ...values, target ?? 0);
+let hi = Math.max(0, ...values, target ?? 0);
+if (hi - lo < 1e-9) hi = lo + 1;
+const rough = (hi - lo) / 4;
+const mag = 10 ** Math.floor(Math.log10(rough));
+const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= rough)!;
+lo = Math.floor(lo / step) * step;
+hi = Math.ceil(hi / step) * step;
+const y = (v: number) => M.top + ((hi - v) / (hi - lo)) * ih;
+const yTicks: number[] = [];
+for (let v = lo; v <= hi + step / 2; v += step) yTicks.push(Number(v.toFixed(10)));
+const tickLabel = (v: number) => (unit === 'yield' ? `${v.toFixed(0)}bp` : `${Number(v.toFixed(2))}%`);
+
+// X ticks: up to 5 evenly spaced dates from the series.
+const span = (t1 - t0) / 86_400_000;
+const fmtTick = (d: string) =>
+	new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
+		day: span > 400 ? undefined : 'numeric',
+		month: 'short',
+		year: span > 300 ? '2-digit' : undefined,
+		timeZone: 'UTC',
+	});
+const nX = Math.min(5, series.length);
+const xTicks = [...new Set(Array.from({ length: nX }, (_, i) => series[Math.round((i * (series.length - 1)) / Math.max(1, nX - 1))].date))];
+
+const path = series.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
+const area = `${path}L${x(series.at(-1)!.date).toFixed(1)},${y(0).toFixed(1)}L${x(series[0].date).toFixed(1)},${y(0).toFixed(1)}Z`;
+
+const valueOn = (date: string) => [...series].reverse().find((p) => p.date <= date);
+const placedMarkers = markers
+	.filter((m) => m.date >= series[0].date && m.date <= series.at(-1)!.date)
+	.map((m) => {
+		// Posts on non-trading days attach to the previous close for the tooltip.
+		const on = valueOn(m.date)!;
+		return { ...m, seriesDate: on.date, cx: x(m.date), cy: y(on.value) };
+	});
+
+const end = series.at(-1)!;
+const data = JSON.stringify({
+	unit,
+	points: series.map((p) => [p.date, p.value, p.priceValue]),
+	markers: placedMarkers.map((m) => [m.seriesDate, m.title]),
+	box: { left: M.left, width: iw, W, H },
+	t0,
+	t1,
+	yLo: lo,
+	yHi: hi,
+	top: M.top,
+	ih,
+});
+---
+
+<figure class="return-chart" data-chart={data}>
+	<div class="scroll">
+	<div class="plot">
+		<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Return since entry, ${fmtReturn(end.value, unit)} as of ${end.date}`} tabindex="0">
+			{yTicks.map((v) => (
+				<g>
+					<line class={v === 0 ? 'zero' : 'grid'} x1={M.left} x2={M.left + iw} y1={y(v)} y2={y(v)} />
+					<text class="tick" x={M.left - 8} y={y(v)} text-anchor="end" dominant-baseline="middle">{tickLabel(v)}</text>
+				</g>
+			))}
+			{xTicks.map((d) => (
+				<text class="tick" x={x(d)} y={H - 8} text-anchor="middle">{fmtTick(d)}</text>
+			))}
+			{target !== undefined && (
+				<g>
+					<line class="target" x1={M.left} x2={M.left + iw} y1={y(target)} y2={y(target)} />
+					<text class="tick" x={M.left + 4} y={y(target) - 5}>Target {fmtReturn(target, unit)}</text>
+				</g>
+			)}
+			{placedMarkers.map((m) => (
+				<g>
+					<line class="post" x1={m.cx} x2={m.cx} y1={M.top} y2={M.top + ih} />
+					<text class="post-label" x={m.cx} y={M.top - 8} text-anchor="middle">{m.label}</text>
+				</g>
+			))}
+			<path class="area" d={area} />
+			<path class="line" d={path} />
+			{placedMarkers.map((m) => <circle class="dot" cx={m.cx} cy={m.cy} r="4.5" />)}
+			<circle class="dot" cx={x(end.date)} cy={y(end.value)} r="4.5" />
+			<text class="end-label" x={x(end.date) + 10} y={y(end.value)} dominant-baseline="middle">{fmtReturn(end.value, unit)}</text>
+			<line class="crosshair" x1="0" x2="0" y1={M.top} y2={M.top + ih} visibility="hidden" />
+			<circle class="dot focus" r="4.5" visibility="hidden" />
+			<rect class="hit" x={M.left} y={M.top} width={iw} height={ih} />
+		</svg>
+		<div class="tooltip" hidden>
+			<div class="tt-value"></div>
+			<div class="tt-sub"></div>
+			<div class="tt-date"></div>
+			<div class="tt-post"></div>
+		</div>
+	</div>
+	</div>
+	<details>
+		<summary>Data table</summary>
+		<div class="table-wrap">
+			<table>
+				<thead><tr><th>Date</th><th class="num">Total return</th><th class="num">Price return</th></tr></thead>
+				<tbody>
+					{[...series].reverse().map((p) => (
+						<tr><td>{p.date}</td><td class="num">{fmtReturn(p.value, unit)}</td><td class="num">{fmtReturn(p.priceValue, unit)}</td></tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	</details>
+</figure>
+
+<script>
+	type ChartData = {
+		unit: 'price' | 'yield';
+		points: [string, number, number][];
+		markers: [string, string][];
+		box: { left: number; width: number; W: number; H: number };
+		t0: number;
+		t1: number;
+		yLo: number;
+		yHi: number;
+		top: number;
+		ih: number;
+	};
+
+	const fmt = (v: number, unit: ChartData['unit']) => {
+		const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+		return unit === 'yield' ? `${sign}${Math.abs(v).toFixed(0)}bp` : `${sign}${Math.abs(v).toFixed(2)}%`;
+	};
+
+	for (const fig of document.querySelectorAll<HTMLElement>('.return-chart')) {
+		const d: ChartData = JSON.parse(fig.dataset.chart!);
+		const svg = fig.querySelector('svg')!;
+		const cross = svg.querySelector<SVGLineElement>('.crosshair')!;
+		const dot = svg.querySelector<SVGCircleElement>('.focus')!;
+		const tip = fig.querySelector<HTMLElement>('.tooltip')!;
+		const ts = d.points.map(([date]) => Date.parse(`${date}T00:00:00Z`));
+		const xOf = (t: number) => d.box.left + (d.t1 === d.t0 ? d.box.width / 2 : ((t - d.t0) / (d.t1 - d.t0)) * d.box.width);
+		const yOf = (v: number) => d.top + ((d.yHi - v) / (d.yHi - d.yLo)) * d.ih;
+		let index = d.points.length - 1;
+
+		const show = (i: number) => {
+			index = Math.max(0, Math.min(d.points.length - 1, i));
+			const [date, total, price] = d.points[index];
+			const cx = xOf(ts[index]);
+			const cy = yOf(total);
+			cross.setAttribute('x1', String(cx));
+			cross.setAttribute('x2', String(cx));
+			dot.setAttribute('cx', String(cx));
+			dot.setAttribute('cy', String(cy));
+			cross.setAttribute('visibility', 'visible');
+			dot.setAttribute('visibility', 'visible');
+			tip.querySelector('.tt-value')!.textContent = fmt(total, d.unit);
+			tip.querySelector('.tt-sub')!.textContent = d.unit === 'price' ? `Price only ${fmt(price, d.unit)}` : '';
+			tip.querySelector('.tt-date')!.textContent = date;
+			const post = d.markers.find(([m]) => m === date);
+			tip.querySelector('.tt-post')!.textContent = post ? post[1] : '';
+			tip.hidden = false;
+			// Position in CSS pixels, flipping left near the right edge.
+			const scale = svg.getBoundingClientRect().width / d.box.W;
+			const left = cx * scale;
+			tip.style.left = `${left}px`;
+			tip.style.top = `${cy * scale}px`;
+			tip.classList.toggle('flip', left > svg.getBoundingClientRect().width * 0.65);
+		};
+		const hide = () => {
+			cross.setAttribute('visibility', 'hidden');
+			dot.setAttribute('visibility', 'hidden');
+			tip.hidden = true;
+		};
+		const nearest = (clientX: number) => {
+			const rect = svg.getBoundingClientRect();
+			const vx = ((clientX - rect.left) / rect.width) * d.box.W;
+			const t = d.t0 + ((vx - d.box.left) / d.box.width) * (d.t1 - d.t0);
+			let best = 0;
+			for (let i = 1; i < ts.length; i++) if (Math.abs(ts[i] - t) < Math.abs(ts[best] - t)) best = i;
+			return best;
+		};
+
+		svg.addEventListener('pointermove', (e) => show(nearest(e.clientX)));
+		svg.addEventListener('pointerleave', hide);
+		svg.addEventListener('focus', () => show(index));
+		svg.addEventListener('blur', hide);
+		svg.addEventListener('keydown', (e) => {
+			if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+				e.preventDefault();
+				show(index + (e.key === 'ArrowRight' ? 1 : -1));
+			}
+		});
+	}
+</script>
+
+<style>
+	.return-chart {
+		margin: 1rem 0 1.5rem;
+	}
+	/* Below ~640px the chart scrolls sideways rather than shrinking its text to illegible. */
+	.scroll {
+		overflow-x: auto;
+	}
+	.plot {
+		position: relative;
+		min-width: 720px;
+	}
+	svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		overflow: visible;
+	}
+	svg:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 4px;
+	}
+	.grid {
+		stroke: var(--grid);
+		stroke-width: 1;
+	}
+	.zero {
+		stroke: var(--axis);
+		stroke-width: 1;
+	}
+	.target {
+		stroke: var(--muted);
+		stroke-width: 1;
+		opacity: 0.6;
+	}
+	.post {
+		stroke: var(--axis);
+		stroke-width: 1;
+	}
+	.tick,
+	.post-label {
+		fill: var(--muted);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+	.post-label {
+		font-weight: 600;
+	}
+	.end-label {
+		fill: var(--fg);
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.line {
+		fill: none;
+		stroke: var(--series-1);
+		stroke-width: 2;
+		stroke-linejoin: round;
+		stroke-linecap: round;
+	}
+	.area {
+		fill: var(--series-1);
+		opacity: 0.1;
+	}
+	.dot {
+		fill: var(--series-1);
+		stroke: var(--bg);
+		stroke-width: 2;
+	}
+	.crosshair {
+		stroke: var(--muted);
+		stroke-width: 1;
+	}
+	.hit {
+		fill: transparent;
+		cursor: crosshair;
+	}
+	.tooltip {
+		position: absolute;
+		transform: translate(12px, -50%);
+		pointer-events: none;
+		background: var(--bg);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 0.4rem 0.6rem;
+		font-size: 0.8rem;
+		line-height: 1.35;
+		box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+		white-space: nowrap;
+	}
+	.tooltip.flip {
+		transform: translate(calc(-100% - 12px), -50%);
+	}
+	.tt-value {
+		font-weight: 700;
+		font-size: 0.95rem;
+	}
+	.tt-sub,
+	.tt-date {
+		color: var(--muted);
+	}
+	.tt-post:empty,
+	.tt-sub:empty {
+		display: none;
+	}
+	.tt-post {
+		margin-top: 0.2rem;
+		font-weight: 600;
+	}
+	details {
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+	}
+	summary {
+		cursor: pointer;
+		color: var(--muted);
+	}
+	.table-wrap {
+		max-height: 16rem;
+		overflow-y: auto;
+		margin-top: 0.5rem;
+	}
+	table {
+		border-collapse: collapse;
+		width: 100%;
+		max-width: 28rem;
+	}
+	th,
+	td {
+		padding: 0.2rem 0.5rem;
+		border-bottom: 1px solid var(--line);
+		text-align: left;
+	}
+</style>

@@ -75,15 +75,15 @@ describe('computePerformance', () => {
     expect(p.target?.hitDate).toBe('2026-10-06'); // +15bp on Oct 2, +50bp on Oct 6
   });
 
-  it('back-dated entry: gap is reported and pre-posting target hits do not count', () => {
+  it('back-dated entry: gap is reported and target hits count from the entry date', () => {
     const p = computePerformance(
       terms({ long: ['AAA'], entry_date: d('2026-10-01'), date: d('2026-10-06'), target_return: 4 }),
       prices,
       '2026-10-07',
     );
     expect(p.entryGapDays).toBe(5);
-    // +5% on Oct 2 is before posting, so the first counted hit is Oct 6.
-    expect(p.target?.hitDate).toBe('2026-10-06');
+    // +5% on Oct 2 is before posting but after entry, so it counts.
+    expect(p.target?.hitDate).toBe('2026-10-02');
   });
 
   it('entry on a weekend uses the previous close', () => {
