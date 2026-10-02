@@ -9,7 +9,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "vitest run",
+    "prices": "python scripts/fetch_prices.py"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.19",
