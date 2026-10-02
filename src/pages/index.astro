@@ -1,30 +1,16 @@
 ---
+import Base from '../layouts/Base.astro';
 import { loadTheses } from '../lib/data';
+import { url } from '../lib/format';
 
-const base = import.meta.env.BASE_URL;
-// Loading here makes every build validate all threads, until the real pages exist.
 const theses = await loadTheses();
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
-		<link rel="icon" href={`${base}favicon.ico`} />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Thesis Tracker — Alpha Beta Generator</title>
-	</head>
-	<body>
-		<h1>Thesis Tracker</h1>
-		<p>Alpha Beta Generator. Under construction.</p>
-		<ul>
-			{theses.map((t) => (
-				<li>
-					#{t.thread.number} {t.thread.opening.data.title} — {t.status},{' '}
-					{t.performance ? `${t.performance.end.value.toFixed(2)}${t.performance.unit === 'yield' ? 'bp' : '%'}` : t.pending}
-				</li>
-			))}
-		</ul>
-	</body>
-</html>
+<Base>
+	<h1>Thesis Tracker</h1>
+	<p>
+		A public, timestamped record of my investment theses, losers included. Methodology and verification guide coming
+		soon.
+	</p>
+	<p><a href={url('theses/')}>See all {theses.length} theses →</a></p>
+</Base>

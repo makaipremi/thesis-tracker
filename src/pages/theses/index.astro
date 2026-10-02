@@ -1,0 +1,193 @@
+---
+import Base from '../../layouts/Base.astro';
+import { loadTheses } from '../../lib/data';
+import { fmtDate, fmtLegs, fmtReturn, fmtTarget, returnClass, url } from '../../lib/format';
+import { normaliseLegs } from '../../lib/scoring';
+
+const theses = (await loadTheses()).toSorted(
+	(a, b) => b.thread.opening.data.date.getTime() - a.thread.opening.data.date.getTime() || b.thread.number - a.thread.number,
+);
+const counts = {
+	all: theses.length,
+	open: theses.filter((t) => t.status === 'open').length,
+	closed: theses.filter((t) => t.status === 'closed').length,
+};
+
+function gap(days: number): string {
+	if (days === 0) return 'same day';
+	const n = Math.abs(days);
+	return `${n} day${n === 1 ? '' : 's'} ${days > 0 ? 'before' : 'after'} post`;
+}
+---
+
+<Base title="Theses">
+	<h1>Theses</h1>
+	<p class="muted">
+		Every thesis ever posted, including the losers. Returns are total returns (dividends reinvested) from the entry
+		close, over gross position size; yield theses are in basis points.
+	</p>
+
+	<div class="filters" role="group" aria-label="Filter by status">
+		<button type="button" data-filter="all" aria-pressed="true">All ({counts.all})</button>
+		<button type="button" data-filter="open" aria-pressed="false">Open ({counts.open})</button>
+		<button type="button" data-filter="closed" aria-pressed="false">Closed ({counts.closed})</button>
+	</div>
+
+	{
+		theses.length === 0 ? (
+			<p>No theses yet.</p>
+		) : (
+			<div class="scroll">
+				<table>
+					<thead>
+						<tr>
+							<th class="num">#</th>
+							<th>Thesis</th>
+							<th>Long</th>
+							<th>Short</th>
+							<th>Posted</th>
+							<th>Entry point</th>
+							<th>Status</th>
+							<th class="num">Return</th>
+							<th>Target</th>
+							<th>Last updated</th>
+						</tr>
+					</thead>
+					<tbody>
+						{theses.map(({ thread, status, performance: perf, pending }) => {
+							const o = thread.opening.data;
+							const legs = normaliseLegs(o);
+							return (
+								<tr data-status={status}>
+									<td class="num">{thread.number}</td>
+									<td>
+										<a href={url(`theses/${thread.slug}/`)}>{o.title}</a>
+									</td>
+									<td>{fmtLegs(legs, 'long') || '—'}</td>
+									<td>{fmtLegs(legs, 'short') || '—'}</td>
+									<td class="nowrap">{fmtDate(o.date)}</td>
+									<td class="nowrap">
+										{perf ? (
+											<>
+												{perf.legs[0].entryDate}
+												<br />
+												<span class="muted small">{gap(perf.entryGapDays)}</span>
+											</>
+										) : (
+											fmtDate(o.entry_date)
+										)}
+									</td>
+									<td>
+										{thread.close ? (
+											<span class={`badge ${thread.close.outcome}`}>
+												{thread.close.outcome} {fmtDate(thread.close.date)}
+											</span>
+										) : (
+											<span class="badge open">open</span>
+										)}
+									</td>
+									<td class={`num ${returnClass(perf?.end.value)}`}>
+										{perf ? (
+											<span title={`Price only: ${fmtReturn(perf.end.priceValue, perf.unit)} · as of ${perf.end.date}`}>
+												{fmtReturn(perf.end.value, perf.unit)}
+											</span>
+										) : (
+											<span class="muted" title={pending}>
+												prices pending
+											</span>
+										)}
+									</td>
+									<td>
+										{o.target !== undefined
+											? `${o.target} · ${fmtTarget(perf)}`
+											: o.target_return !== undefined
+												? `${fmtReturn(o.target_return, o.unit)} · ${fmtTarget(perf)}`
+												: '—'}
+									</td>
+									<td class="nowrap">{fmtDate((thread.replies.at(-1) ?? thread.opening).data.date)}</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+		)
+	}
+	<p class="muted small">Hover a return to see the price-only return and the date it was marked.</p>
+</Base>
+
+<script>
+	const buttons = document.querySelectorAll<HTMLButtonElement>('[data-filter]');
+	const rows = document.querySelectorAll<HTMLTableRowElement>('tbody tr[data-status]');
+	for (const button of buttons) {
+		button.addEventListener('click', () => {
+			const filter = button.dataset.filter;
+			for (const b of buttons) b.setAttribute('aria-pressed', String(b === button));
+			for (const row of rows) row.hidden = filter !== 'all' && row.dataset.status !== filter;
+		});
+	}
+</script>
+
+<style>
+	.filters {
+		display: flex;
+		gap: 0.5rem;
+		margin: 1rem 0;
+	}
+	.filters button {
+		font: inherit;
+		padding: 0.25rem 0.75rem;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--fg);
+		cursor: pointer;
+	}
+	.filters button[aria-pressed='true'] {
+		border-color: var(--fg);
+		font-weight: 600;
+	}
+	.scroll {
+		overflow-x: auto;
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.92rem;
+	}
+	th,
+	td {
+		padding: 0.5rem 0.6rem;
+		border-bottom: 1px solid var(--line);
+		text-align: left;
+		vertical-align: top;
+	}
+	th {
+		font-weight: 600;
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	.nowrap {
+		white-space: nowrap;
+	}
+	.small {
+		font-size: 0.8rem;
+	}
+	.badge {
+		display: inline-block;
+		padding: 0 0.5rem;
+		border-radius: 999px;
+		font-size: 0.8rem;
+		border: 1px solid var(--line);
+		white-space: nowrap;
+		text-transform: capitalize;
+	}
+	.badge.won {
+		color: var(--pos);
+		border-color: currentColor;
+	}
+	.badge.lost {
+		color: var(--neg);
+		border-color: currentColor;
+	}
+</style>

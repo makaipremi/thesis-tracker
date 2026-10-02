@@ -1,0 +1,122 @@
+---
+import { url } from '../lib/format';
+
+interface Props {
+	title?: string;
+}
+
+const { title } = Astro.props;
+const fullTitle = title ? `${title} — Thesis Tracker` : 'Thesis Tracker — Alpha Beta Generator';
+const nav = [
+	{ href: url(), label: 'Home' },
+	{ href: url('theses/'), label: 'Theses' },
+];
+const here = Astro.url.pathname;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+		<link rel="icon" href={url('favicon.ico')} />
+		<meta name="generator" content={Astro.generator} />
+		<title>{fullTitle}</title>
+	</head>
+	<body>
+		<header>
+			<a class="brand" href={url()}>Alpha Beta Generator</a>
+			<nav>
+				{nav.map((n) => <a href={n.href} aria-current={here === n.href ? 'page' : undefined}>{n.label}</a>)}
+			</nav>
+		</header>
+		<main>
+			<slot />
+		</main>
+		<footer>Personal views. Not investment advice.</footer>
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		color-scheme: light dark;
+		--fg: #1a1a1a;
+		--muted: #666;
+		--bg: #fff;
+		--line: #e3e3e3;
+		--pos: #157f3b;
+		--neg: #b42318;
+		--accent: #1d4ed8;
+		font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+		line-height: 1.5;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--fg: #e8e8e8;
+			--muted: #9a9a9a;
+			--bg: #141414;
+			--line: #2c2c2c;
+			--pos: #4ade80;
+			--neg: #f87171;
+			--accent: #7aa2ff;
+		}
+	}
+	body {
+		margin: 0 auto;
+		max-width: 68rem;
+		padding: 0 1.25rem;
+		color: var(--fg);
+		background: var(--bg);
+	}
+	a {
+		color: var(--accent);
+	}
+	header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1.25rem 0;
+		border-bottom: 1px solid var(--line);
+	}
+	header .brand {
+		font-weight: 600;
+		color: var(--fg);
+		text-decoration: none;
+	}
+	nav {
+		display: flex;
+		gap: 1rem;
+	}
+	nav a {
+		color: var(--muted);
+		text-decoration: none;
+	}
+	nav a[aria-current='page'] {
+		color: var(--fg);
+		font-weight: 600;
+	}
+	main {
+		padding: 1.5rem 0 3rem;
+	}
+	footer {
+		padding: 1rem 0 2rem;
+		border-top: 1px solid var(--line);
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.muted {
+		color: var(--muted);
+	}
+	.pos {
+		color: var(--pos);
+	}
+	.neg {
+		color: var(--neg);
+	}
+	.num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+</style>
