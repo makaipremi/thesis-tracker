@@ -1,0 +1,240 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadTheses } from '../lib/data';
+import { fmtDate, fmtReturn, returnClass, url } from '../lib/format';
+import { computeScorecard, type ReturnStats } from '../lib/scorecard';
+import type { Unit } from '../lib/scoring';
+
+const theses = await loadTheses();
+const card = computeScorecard(
+	theses.map(({ thread, status, performance: perf }) => ({
+		status,
+		outcome: thread.close?.outcome,
+		unit: thread.opening.data.unit,
+		value: perf?.end.value,
+		entryDate: perf?.legs[0].entryDate,
+		closeDate: thread.close ? fmtDate(thread.close.date) : undefined,
+	})),
+);
+
+const closed = theses
+	.filter((t) => t.thread.close)
+	.toSorted((a, b) => b.thread.close!.date.getTime() - a.thread.close!.date.getTime());
+
+const pct = (r: number | undefined) => (r === undefined ? '—' : `${Math.round(r * 100)}%`);
+const units: { unit: Unit; label: string }[] = [
+	{ unit: 'price', label: 'Price theses (total return, %)' },
+	{ unit: 'yield', label: 'Yield theses (basis points)' },
+];
+/**
+ * Realized = average return of closed theses; unrealized = average current mark of open ones.
+ * The headline is the % figure for price theses; yield theses (bp) are shown under it, never mixed in.
+ */
+function gainTile(label: string, stats: typeof card.closedReturns, kind: 'closed' | 'open') {
+	const { price, yield: yld } = stats;
+	const theses = (n: number) => `${n} ${kind} ${n === 1 ? 'thesis' : 'theses'}`;
+	const main = price
+		? { value: price.average, unit: 'price' as Unit }
+		: yld
+			? { value: yld.average, unit: 'yield' as Unit }
+			: undefined;
+	const parts: string[] = [];
+	if (price) parts.push(`average of ${theses(price.count)}`);
+	if (price && yld) parts.push(`yield theses ${fmtReturn(yld.average, 'yield')} avg (${yld.count})`);
+	if (!price && yld) parts.push(`average of ${theses(yld.count)}, in bp`);
+	return { label, main, sub: parts.length ? parts.join(' · ') : `no ${kind} theses yet` };
+}
+const gainTiles = [
+	gainTile('Realized gain', card.closedReturns, 'closed'),
+	gainTile('Unrealized gain', card.openReturns, 'open'),
+];
+const statRows = (s: ReturnStats, unit: Unit) => [
+	['Average', fmtReturn(s.average, unit), s.average],
+	['Median', fmtReturn(s.median, unit), s.median],
+	['Best', fmtReturn(s.best, unit), s.best],
+	['Worst', fmtReturn(s.worst, unit), s.worst],
+] as const;
+---
+
+<Base title="Scorecard">
+	<h1>Scorecard</h1>
+	<p class="muted">
+		Computed from the thesis files and frozen prices on every build — never typed by hand. Every thesis ever posted is
+		included.
+	</p>
+
+	<section class="tiles" aria-label="Summary">
+		<div class="tile">
+			<div class="label">Theses posted</div>
+			<div class="value">{card.total}</div>
+			<div class="sub">{card.open} open · {card.closed} closed</div>
+		</div>
+		<div class="tile">
+			<div class="label">Win rate</div>
+			<div class="value">{pct(card.winRate)}</div>
+			<div class="sub">{card.closed ? `${card.outcomes.won} won of ${card.closed} closed` : 'no closed theses yet'}</div>
+		</div>
+		{gainTiles.map((g) => (
+			<div class="tile">
+				<div class="label">{g.label}</div>
+				<div class={`value ${returnClass(g.main?.value)}`}>{g.main ? fmtReturn(g.main.value, g.main.unit) : '—'}</div>
+				<div class="sub">{g.sub}</div>
+			</div>
+		))}
+		<div class="tile">
+			<div class="label">Average holding</div>
+			<div class="value">{card.averageDaysHeld === undefined ? '—' : `${Math.round(card.averageDaysHeld)} days`}</div>
+			<div class="sub">entry to close</div>
+		</div>
+	</section>
+
+	<h2>Outcomes</h2>
+	<table class="outcomes">
+		<tbody>
+			<tr><th>Won</th><td class="num">{card.outcomes.won}</td></tr>
+			<tr><th>Lost</th><td class="num">{card.outcomes.lost}</td></tr>
+			<tr><th>Invalidated</th><td class="num">{card.outcomes.invalidated}</td><td class="muted">the "wrong if" condition happened</td></tr>
+			<tr><th>Expired</th><td class="num">{card.outcomes.expired}</td><td class="muted">horizon passed without a resolution</td></tr>
+			<tr><th>Open</th><td class="num">{card.open}</td></tr>
+		</tbody>
+	</table>
+	{card.disagreements > 0 && (
+		<p class="small">
+			{card.disagreements} closed {card.disagreements === 1 ? 'thesis has' : 'theses have'} an outcome that disagrees with
+			the sign of its return (called won with a loss, or lost with a gain). They're flagged ⚑ below.
+		</p>
+	)}
+
+	<h2>Returns</h2>
+	{units.map(({ unit, label }) => {
+		const c = card.closedReturns[unit];
+		const o = card.openReturns[unit];
+		if (!c && !o) return null;
+		return (
+			<section class="returns">
+				<h3>{label}</h3>
+				<table>
+					<thead>
+						<tr><th></th><th class="num">Closed{c && ` (${c.count})`}</th><th class="num">Open, marked today{o && ` (${o.count})`}</th></tr>
+					</thead>
+					<tbody>
+						{(c ? statRows(c, unit) : o ? statRows(o, unit) : []).map(([name], i) => (
+							<tr>
+								<th>{name}</th>
+								<td class={`num ${c ? returnClass(statRows(c, unit)[i][2]) : ''}`}>{c ? statRows(c, unit)[i][1] : '—'}</td>
+								<td class={`num muted`}>{o ? statRows(o, unit)[i][1] : '—'}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</section>
+		);
+	})}
+	{card.total === 0 && <p>No theses yet.</p>}
+	{card.pending > 0 && <p class="muted small">{card.pending} thesis{card.pending === 1 ? '' : 'es'} excluded from returns while prices are pending.</p>}
+
+	<h2>Closed theses</h2>
+	{closed.length === 0 ? (
+		<p class="muted">None yet. Every closed thesis will be listed here, winners and losers alike.</p>
+	) : (
+		<div class="scroll">
+			<table class="closed">
+				<thead>
+					<tr><th class="num">#</th><th>Thesis</th><th>Closed</th><th>My call</th><th class="num">Return</th><th>Target</th></tr>
+				</thead>
+				<tbody>
+					{closed.map(({ thread, performance: perf }) => {
+						const v = perf?.end.value;
+						const o = thread.close!.outcome;
+						const disagrees = v !== undefined && ((o === 'won' && v < 0) || (o === 'lost' && v > 0));
+						return (
+							<tr>
+								<td class="num">{thread.number}</td>
+								<td><a href={url(`theses/${thread.slug}/`)}>{thread.opening.data.title}</a></td>
+								<td class="nowrap">{fmtDate(thread.close!.date)}</td>
+								<td class="cap">{o}{disagrees && <span title="Outcome disagrees with the sign of the return"> ⚑</span>}</td>
+								<td class={`num ${returnClass(v)}`}>{v === undefined ? 'pending' : fmtReturn(v, perf!.unit)}</td>
+								<td>{perf?.target ? (perf.target.hitDate ? `hit ${perf.target.hitDate}` : 'not reached') : '—'}</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
+	)}
+
+	<h2>How to read this</h2>
+	<ul class="notes">
+		<li><strong>Outcomes are my own call</strong>, made in the closing post. Where my call disagrees with the sign of the return, the thesis is flagged ⚑.</li>
+		<li><strong>Win rate counts invalidated and expired theses against me.</strong> Only "won" counts as a win.</li>
+		<li><strong>Realized gain</strong> is the average return of closed theses; <strong>unrealized gain</strong> is the average of open theses at today's mark. <strong>Returns</strong> are total returns (dividends reinvested) from the entry close, over gross position size. Yield theses are in basis points and are never averaged with % returns.</li>
+		<li><strong>Target hits</strong> count from the entry date. Each thesis shows how many days its entry was before posting.</li>
+		<li><strong>What this doesn't cover:</strong> views I never posted. Every posted thesis stays on the site, closed or not.</li>
+	</ul>
+</Base>
+
+<style>
+	h2 {
+		font-size: 1.05rem;
+		margin: 2rem 0 0.5rem;
+	}
+	h3 {
+		font-size: 0.95rem;
+		margin: 1rem 0 0.25rem;
+	}
+	.small {
+		font-size: 0.85rem;
+	}
+	.tiles {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+		gap: 1rem;
+		margin: 1.5rem 0;
+		padding: 1rem 0;
+		border-top: 1px solid var(--line);
+		border-bottom: 1px solid var(--line);
+	}
+	.tile .label {
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.tile .value {
+		font-size: 1.6rem;
+		font-weight: 600;
+	}
+	.tile .sub {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+	table {
+		border-collapse: collapse;
+		font-size: 0.92rem;
+	}
+	th,
+	td {
+		padding: 0.35rem 0.75rem 0.35rem 0;
+		border-bottom: 1px solid var(--line);
+		text-align: left;
+	}
+	thead th,
+	tbody th {
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.returns table,
+	.closed {
+		width: 100%;
+	}
+	.scroll {
+		overflow-x: auto;
+	}
+	.nowrap {
+		white-space: nowrap;
+	}
+	.cap {
+		text-transform: capitalize;
+	}
+	.notes li {
+		margin-bottom: 0.4rem;
+	}
+</style>
