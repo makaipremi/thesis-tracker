@@ -4,13 +4,100 @@ import { loadTheses } from '../lib/data';
 import { url } from '../lib/format';
 
 const theses = await loadTheses();
+const open = theses.filter((t) => t.status === 'open').length;
 ---
 
 <Base>
-	<h1>Thesis Tracker</h1>
-	<p>
-		A public, timestamped record of my investment theses, losers included. Methodology and verification guide coming
-		soon.
-	</p>
-	<p><a href={url('theses/')}>See all {theses.length} theses →</a></p>
+	<div class="prose">
+		<h1>Thesis Tracker</h1>
+		<p class="lead">
+			A public, timestamped record of my investment theses — every call I post, tracked against market prices and kept
+			on the record whether it worked or not.
+		</p>
+		<p>
+			<a href={url('theses/')}>Browse all {theses.length} {theses.length === 1 ? 'thesis' : 'theses'}</a> ({open} open) ·{' '}
+			<a href={url('scorecard/')}>See the scorecard</a>
+		</p>
+
+		<h2>How it works</h2>
+		<p>
+			Each thesis is a thread, like an email to a team. The opening post sets out the view; replies follow as it
+			develops — after earnings, a policy decision, or whatever the catalyst was — and a final post closes it.
+		</p>
+		<ul>
+			<li>
+				<strong>Terms up front.</strong> Every opening post states the instruments, long or short, the entry date, and
+				optionally a target, a horizon, and what would prove it wrong.
+			</li>
+			<li>
+				<strong>Append-only.</strong> A published post is never edited. New information goes in a new, dated reply. Typo
+				fixes are allowed only as separate, labelled changes, and the full edit history is public on GitHub.
+			</li>
+			<li>
+				<strong>Every thesis gets closed</strong> as won, lost, invalidated (the "wrong if" happened) or expired (the
+				horizon passed), with a closing post explaining why.
+			</li>
+			<li>
+				<strong>Nothing is typed by hand.</strong> Returns and the scorecard are computed from the posts and saved market
+				prices every time the site is built.
+			</li>
+		</ul>
+
+		<h2>How returns are measured</h2>
+		<ul>
+			<li>
+				<strong>Entry point</strong> is the closing price on the entry date. I choose that date, usually the close my
+				analysis was based on, and the site always shows how many days it was before the post.
+			</li>
+			<li>
+				<strong>Total return</strong> (dividends reinvested on the ex-date, adjusted for splits) is the headline figure;
+				price-only return is shown alongside.
+			</li>
+			<li>
+				<strong>Pairs and baskets</strong> are measured over gross position size: total profit and loss divided by the
+				sum of all long and short sizes. A short pays the dividends on what it's short.
+			</li>
+			<li><strong>Yield theses</strong> (e.g. a view on the 10-year Treasury yield) are measured in basis points, never mixed with % returns.</li>
+			<li><strong>Targets</strong> count as reached on the first close at or beyond the target after the entry date.</li>
+			<li>
+				<strong>Prices</strong> are daily closes from Yahoo Finance, saved into the public repository when fetched and
+				never overwritten afterwards.
+			</li>
+		</ul>
+
+		<h2>How it's proven</h2>
+		<p>
+			Git commit dates can be set to anything on my own machine, so they aren't proof on their own. Each post is also
+			anchored by independent third parties:
+		</p>
+		<ul>
+			<li><strong>OpenTimestamps</strong> — a cryptographic fingerprint of each post is recorded in the Bitcoin blockchain, which nobody can backdate.</li>
+			<li><strong>Wayback Machine</strong> — the Internet Archive keeps its own copy of each thesis page as it looked when published.</li>
+			<li><strong>Public history</strong> — every change to every file is visible on GitHub.</li>
+		</ul>
+		<p>The <a href={url('verify/')}>verification guide</a> shows how to check any of this yourself.</p>
+
+		<h2>What this doesn't cover</h2>
+		<p>
+			This is a record of the theses I chose to post. It can't show ideas I had and never published. What it does
+			guarantee is that once something is posted, it stays — with its result — and can't be changed or removed without
+			that being visible.
+		</p>
+	</div>
 </Base>
+
+<style>
+	.prose {
+		max-width: 44rem;
+	}
+	.lead {
+		font-size: 1.15rem;
+	}
+	h2 {
+		font-size: 1.15rem;
+		margin: 2rem 0 0.5rem;
+	}
+	li {
+		margin-bottom: 0.4rem;
+	}
+</style>

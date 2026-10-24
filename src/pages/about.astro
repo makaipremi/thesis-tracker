@@ -1,0 +1,45 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="About">
+	<div class="prose">
+		<h1>About</h1>
+		<p>
+			I'm an investment research analyst with a passion for markets. This is my personal portfolio of investment
+			theses: each call is timestamped, tracked against market prices, and kept on the record whether it worked or not.
+		</p>
+		<p>I publish as <strong>Alpha Beta Generator</strong>.</p>
+
+		<h2 id="disclaimer">Disclaimer</h2>
+		<p>
+			This site is a personal record of my own investment views. It is not investment advice, a recommendation to buy
+			or sell any security, or an offer or solicitation of any kind. Nothing here takes account of your objectives,
+			financial situation or needs. Do your own research and, where appropriate, consult a licensed adviser before
+			making any investment decision.
+		</p>
+		<p>
+			These views are mine alone. They are not the views of my employer or any organisation I am or have been
+			associated with, and they are not based on any non-public information.
+		</p>
+		<p>
+			I may or may not hold positions in the instruments discussed, and I may change my positions at any time without
+			updating this site.
+		</p>
+		<p>
+			Prices and returns are calculated from third-party data (Yahoo Finance) and may contain errors. Past performance
+			is not a reliable indicator of future results. All investments carry risk, including the loss of capital.
+		</p>
+	</div>
+</Base>
+
+<style>
+	.prose {
+		max-width: 44rem;
+	}
+	h2 {
+		font-size: 1.15rem;
+		margin: 2rem 0 0.5rem;
+		scroll-margin-top: 1rem;
+	}
+</style>

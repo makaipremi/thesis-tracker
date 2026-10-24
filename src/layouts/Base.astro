@@ -11,6 +11,8 @@ const nav = [
 	{ href: url(), label: 'Home' },
 	{ href: url('theses/'), label: 'Theses' },
 	{ href: url('scorecard/'), label: 'Scorecard' },
+	{ href: url('verify/'), label: 'Verify' },
+	{ href: url('about/'), label: 'About' },
 ];
 const here = Astro.url.pathname;
 ---
@@ -34,7 +36,7 @@ const here = Astro.url.pathname;
 		<main>
 			<slot />
 		</main>
-		<footer>Personal views. Not investment advice.</footer>
+		<footer>Personal views only. Not investment advice. Not affiliated with my employer. <a href={url('about/#disclaimer')}>Disclaimer</a></footer>
 	</body>
 </html>
 
