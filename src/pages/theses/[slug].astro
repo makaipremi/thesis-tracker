@@ -80,7 +80,7 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 			<dt>Entry point</dt>
 			<dd>
 				{perf
-					? perf.legs.map((l) => `${l.symbol} ${l.entryClose} (close ${l.entryDate})`).join(' · ')
+					? perf.legs.map((l) => `${l.symbol} ${l.entryClose.toFixed(2)} (close ${l.entryDate})`).join(' · ')
 					: `Close on ${fmtDate(o.entry_date)}`}
 				{perf && <span class="muted"> — {gapText(perf.entryGapDays)}</span>}
 			</dd>
