@@ -25,6 +25,7 @@ const here = Astro.url.pathname;
 		<link rel="icon" href={url('favicon.ico')} />
 		<meta name="generator" content={Astro.generator} />
 		<title>{fullTitle}</title>
+		<link rel="alternate" type="application/rss+xml" title="Thesis Tracker — Alpha Beta Generator" href={url('rss.xml')} />
 	</head>
 	<body>
 		<header>
@@ -36,7 +37,7 @@ const here = Astro.url.pathname;
 		<main>
 			<slot />
 		</main>
-		<footer>Personal views only. Not investment advice. Not affiliated with my employer. <a href={url('about/#disclaimer')}>Disclaimer</a></footer>
+		<footer>Personal views only. Not investment advice. Not affiliated with my employer. <a href={url('about/#disclaimer')}>Disclaimer</a> · <a href={url('rss.xml')}>RSS</a></footer>
 	</body>
 </html>
 
