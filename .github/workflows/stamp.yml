@@ -1,0 +1,56 @@
+# Timestamp every thesis post with OpenTimestamps and commit the proofs to proofs/.
+# - On push: stamp any post version that has no proof yet.
+# - Daily: upgrade pending proofs once Bitcoin has confirmed them (usually within hours).
+# Pushes made with GITHUB_TOKEN don't trigger other workflows, so this redeploys
+# the site explicitly when it commits.
+name: Stamp
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/content/theses/**']
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: stamp
+  cancel-in-progress: false
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install opentimestamps-client
+
+      - name: Stamp new post versions
+        run: python scripts/stamp.py stamp
+
+      - name: Upgrade pending proofs
+        run: python scripts/stamp.py upgrade
+
+      - name: Commit proofs and redeploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add proofs
+          if git diff --cached --quiet; then
+            echo "No proof changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "proofs: update OpenTimestamps proofs"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          gh workflow run deploy.yml --ref main

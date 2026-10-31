@@ -12,10 +12,6 @@ const REPO = 'https://github.com/makaipremi/thesis-tracker';
 			You shouldn't have to trust me. Here's how to check, independently, that a thesis was written when it says, hasn't
 			been changed since, and that its numbers are right.
 		</p>
-		<p class="note">
-			Automatic timestamping and archiving are being switched on. Until they are, the proof links on thesis pages show as
-			"coming in a later step"; the public history and price checks below already work.
-		</p>
 
 		<h2>1. Was it edited after posting?</h2>
 		<p>
@@ -34,8 +30,9 @@ const REPO = 'https://github.com/makaipremi/thesis-tracker';
 		<p>To check a post:</p>
 		<ol>
 			<li>
-				From the thesis page, download the post file (<code>….md</code>) and its proof (<code>….md.ots</code>). Proofs
-				live in the <a href={`${REPO}/tree/main/proofs`}><code>proofs/</code></a> folder, mirroring the thesis folders.
+				Under each post on a thesis page, download the <strong>proof (.ots)</strong> and the <strong>post file</strong>.
+				Proofs live in the <a href={`${REPO}/tree/main/proofs`}><code>proofs/</code></a> folder, one per version of each
+				post, named by the file's SHA-256 fingerprint.
 			</li>
 			<li>
 				Go to <a href="https://opentimestamps.org">opentimestamps.org</a>, drop in the <code>.ots</code> file, then the
@@ -43,21 +40,16 @@ const REPO = 'https://github.com/makaipremi/thesis-tracker';
 			</li>
 			<li>
 				It should say the file existed as of a Bitcoin block and date. That date should be on or just after the post's
-				date. If the file had been changed by even one character, verification fails.
+				date. If a post was ever edited, each earlier version has its own proof; get that version of the file from the
+				GitHub history to check it. If the file had been changed by even one character, verification fails.
 			</li>
 		</ol>
 		<p class="muted">
 			Command-line alternative: <code>pip install opentimestamps-client</code>, then
-			<code>ots verify post.md.ots</code>. A proof less than a few hours old shows as pending until Bitcoin confirms it.
+			<code>ots verify -f post.md proof.ots</code>. A proof less than a few hours old shows as pending until Bitcoin confirms it.
 		</p>
 
-		<h2>3. What did the page say at the time?</h2>
-		<p>
-			Each thesis page links to a <strong>Wayback Machine</strong> snapshot taken by the Internet Archive when it was
-			published. That's a copy held by an independent third party; compare it with the live page.
-		</p>
-
-		<h2>4. Are the numbers right?</h2>
+		<h2>3. Are the numbers right?</h2>
 		<p>
 			Every price used is in the public <a href={`${REPO}/tree/main/prices`}><code>prices/</code></a> folder, one file per
 			ticker, saved when fetched and never overwritten. To check a return:
@@ -95,12 +87,6 @@ const REPO = 'https://github.com/makaipremi/thesis-tracker';
 	}
 	.lead {
 		font-size: 1.15rem;
-	}
-	.note {
-		border-left: 3px solid var(--line);
-		padding-left: 0.75rem;
-		color: var(--muted);
-		font-size: 0.9rem;
 	}
 	h2 {
 		font-size: 1.15rem;

@@ -4,6 +4,7 @@ import ReturnChart from '../../components/ReturnChart.astro';
 import Base from '../../layouts/Base.astro';
 import { loadTheses, type ThesisView } from '../../lib/data';
 import { fmtDate, fmtLegs, fmtReturn, fmtTarget, returnClass, url } from '../../lib/format';
+import { postProofs } from '../../lib/proofs';
 import { normaliseLegs } from '../../lib/scoring';
 
 export async function getStaticPaths() {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 const REPO = 'https://github.com/makaipremi/thesis-tracker';
+const RAW = 'https://raw.githubusercontent.com/makaipremi/thesis-tracker/main';
 
 const { view } = Astro.props;
 const { thread, performance: perf, pending } = view;
@@ -33,7 +35,15 @@ const posts = [
 	{ entry: thread.opening, kind: 'open' as const, title: o.title },
 	...thread.replies.map((r, i) => ({ entry: r, kind: 'reply' as const, title: r.data.title ?? `Update ${i + 1}` })),
 ];
-const rendered = await Promise.all(posts.map(async (p) => ({ ...p, Content: (await render(p.entry)).Content })));
+const rendered = await Promise.all(
+	posts.map(async (p) => ({
+		...p,
+		Content: (await render(p.entry)).Content,
+		file: p.entry.filePath!,
+		proofs: postProofs(p.entry.filePath!),
+	})),
+);
+const proofLabel = { confirmed: 'Timestamp confirmed in Bitcoin', pending: 'Timestamp pending Bitcoin confirmation (usually a few hours)', missing: 'Not yet timestamped' };
 
 const markers = posts.map((p, i) => ({
 	date: fmtDate(p.entry.data.date),
@@ -118,7 +128,7 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 
 	<section class="thread" aria-label="Thread">
 		<h2>Thread</h2>
-		{rendered.map(({ entry, kind, title, Content }, i) => {
+		{rendered.map(({ entry, kind, title, Content, file, proofs }, i) => {
 			const at = returnAt(entry.data.date);
 			const close = 'close' in entry.data ? entry.data.close : undefined;
 			return (
@@ -138,6 +148,25 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 					<div class="body">
 						<Content />
 					</div>
+					<footer class={`stamp ${proofs.status}`}>
+						<span>{proofLabel[proofs.status]}</span>
+						{proofs.current && (
+							<>
+								{' · '}
+								<a href={`${RAW}/${proofs.current.path}`} download>proof (.ots)</a>
+								{' · '}
+								<a href={`${RAW}/${file}`} download>post file</a>
+							</>
+						)}
+						{proofs.earlier.length > 0 && (
+							<>
+								{' · '}
+								<a href={`${REPO}/commits/main/${file}`}>
+									edited — {proofs.earlier.length} earlier version{proofs.earlier.length === 1 ? '' : 's'}, each with its own proof
+								</a>
+							</>
+						)}
+					</footer>
 				</article>
 			);
 		})}
@@ -150,8 +179,10 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 				<a href={`${REPO}/commits/main/src/content/theses/${thread.slug}`}>Full edit history on GitHub</a>
 				<span class="muted"> — every change to these posts, public</span>
 			</li>
-			<li class="muted">OpenTimestamps proofs — coming in a later step</li>
-			<li class="muted">Wayback Machine snapshot — coming in a later step</li>
+			<li>
+				<a href={`${REPO}/tree/main/proofs/${thread.slug}`}>OpenTimestamps proofs</a>
+				<span class="muted"> — one per post version, anchored in Bitcoin; <a href={url('verify/')}>how to check</a></span>
+			</li>
 			<li>
 				Prices used:{' '}
 				{legs.map((l, i) => (
@@ -259,6 +290,12 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 	}
 	.post .body {
 		padding: 0 1rem;
+	}
+	.stamp {
+		padding: 0.5rem 1rem;
+		border-top: 1px solid var(--line);
+		font-size: 0.8rem;
+		color: var(--muted);
 	}
 	.proof ul {
 		padding-left: 1.2rem;
