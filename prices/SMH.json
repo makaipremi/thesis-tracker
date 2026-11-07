@@ -1,0 +1,20 @@
+{
+  "symbol": "SMH",
+  "source": "Yahoo Finance chart API v8: daily raw close (not dividend-adjusted), dividends per share by ex-date, splits as new shares per old share",
+  "currency": "USD",
+  "timezone": "America/New_York",
+  "closes": {
+    "2026-10-26": 541.619995,
+    "2026-10-27": 557.97998,
+    "2026-10-28": 567.669983,
+    "2026-10-29": 561.669983,
+    "2026-10-30": 522.48999,
+    "2026-11-02": 508.309998,
+    "2026-11-03": 518.52002,
+    "2026-11-04": 504.269989,
+    "2026-11-05": 447.730011,
+    "2026-11-06": 463.959991
+  },
+  "dividends": {},
+  "splits": {}
+}

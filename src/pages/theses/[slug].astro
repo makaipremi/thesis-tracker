@@ -290,6 +290,27 @@ const dividends = perf?.legs.flatMap((l) => l.dividends.map((dv) => ({ symbol: l
 	}
 	.post .body {
 		padding: 0 1rem;
+		overflow-x: auto;
+	}
+	.post .body :global(img) {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin: 0.75rem 0 0.25rem;
+		border: 1px solid var(--line);
+	}
+	.post .body :global(table) {
+		border-collapse: collapse;
+		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.post .body :global(th),
+	.post .body :global(td) {
+		padding: 0.3rem 0.6rem;
+		border-bottom: 1px solid var(--line);
+	}
+	.post .body :global(em) {
+		color: var(--muted);
 	}
 	.stamp {
 		padding: 0.5rem 1rem;
